@@ -1,7 +1,9 @@
 # auth.py
 import streamlit as st
-from utils import create_user, get_user_by_email, update_last_login, hash_password, load_user_listings
+from utils import create_user, get_user_by_email, update_last_login, hash_password, load_user_listings, init_db
 
+# Initialize DB at start
+init_db()
 def require_auth():
     if "user" not in st.session_state:
         st.session_state.user = None
@@ -70,3 +72,4 @@ def login_signup_ui():
             st.success("Logged in successfully!")
             st.session_state.page = "Dashboard"
             st.rerun()
+
