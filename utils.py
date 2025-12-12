@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 import hashlib
 
-DB_PATH = Path(__file__).parent / "smartcycle.db"
+DB_PATH = Path("/tmp/smartcycle.db")
 
 # ------------------- DB INIT -------------------
 def init_db():
@@ -63,7 +63,7 @@ def create_user(name, email, password_hash, location):
         c = conn.cursor()
         created_at = datetime.now().isoformat()
         c.execute("""
-        INSERT INTO users (name, email, password_hash, location, created_at)
+        INSERT INTO users (name, email, password, location, created_at)
         VALUES (?, ?, ?, ?, ?)
         """, (name, email, password_hash, location, created_at))
         conn.commit()
@@ -197,3 +197,4 @@ def list_user_chats(user_email):
     conn.close()
 
     return [{"id": r[0], "name": r[1]} for r in rows]
+
