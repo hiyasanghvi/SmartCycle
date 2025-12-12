@@ -74,20 +74,7 @@
 - Deployed on **Streamlit Cloud** with public URL
 
 ---
-## 📸 Screenshots
 
-### Login / Sign Up
-![Login](images_preview/login.jpg)
-![Signup](images_preview/signup.jpg)
-
-### Dashboard & Item Upload
-![Dashboard](images_preview/dashboard.jpg)
-
-### Messaging Center
-![Chatroom](images_preview/messages.jpg)
-
-### Community Feed & Repair Shops
-![Community](images/community.png)
 
 ## 🌐 Tech Stack
 
@@ -119,3 +106,20 @@
 - Multi-language support
 - Integration with local recycling/repair services
 
+## 📸 Screenshots
+
+### Login / Sign Up
+![Login](images_preview/login.jpg)
+![Signup](images_preview/signup.jpg)
+
+### Dashboard & Item Upload
+![Dashboard](images_preview/dashboard.jpg)
+
+### Messaging Center
+![Chatroom](images_preview/messages.jpg)
+
+### Community Feed & Repair Shops
+![Community](images_preview/community_feed.jpg)
+
+### Upload&Analyze
+![Community](images_preview/upload&analyze.jpg)
