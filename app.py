@@ -526,21 +526,17 @@ def repair_shops_page():
                 st.experimental_rerun()
             
             st.markdown("</div>", unsafe_allow_html=True)
-import streamlit as st
-from db import (
-    list_user_chats,
-    get_or_create_private_chat,
-    get_chatroom_messages,
-    send_message,
-    search_messages,
-    user_can_access_chat,
-    create_chatroom
-)
+
+
 from utils import back_button, DB_PATH
 
 def chat_page():
+    import sqlite3
+    from datetime import datetime
+
     back_button()
 
+    # ------------------ PAGE HEADER + FEATURES ------------------
     st.markdown("""
     <div style="
         padding:20px; 
@@ -572,11 +568,10 @@ def chat_page():
     </div>
     """, unsafe_allow_html=True)
 
-    user_email = st.session_state.user["email"]
+    # ------------------ LOAD CHATROOMS ------------------
+    chatrooms = list_user_chats(st.session_state.user["email"])
 
-    # ------------------ LOAD CHATROOMS FOR USER ONLY ------------------
-    chatrooms = list_user_chats(user_email)
-
+    # Create default chatroom if none
     if not chatrooms:
         default_id = create_chatroom("General Support")
         chatrooms = [{"id": default_id, "name": "General Support"}]
@@ -589,9 +584,13 @@ def chat_page():
         msg_query = st.text_input("", placeholder="Search by email, message, or chatroom...")
 
         if msg_query.strip():
-            results = search_messages(msg_query, user_email)
+            results = search_messages(
+                msg_query,
+                st.session_state.user["email"]
+            )
+
             st.markdown("### 🔎 Results")
-            if not results:
+            if len(results) == 0:
                 st.info("No matching messages found.")
             for r in results:
                 st.markdown(f"""
@@ -633,22 +632,25 @@ def chat_page():
         st.markdown("#### 🔐 Private Message")
         pm_email = st.text_input("User Email", placeholder="Enter email to chat privately...")
         if st.button("Start Private Chat"):
-            if pm_email.strip() and pm_email != user_email:
-                private_id = get_or_create_private_chat(user_email, pm_email)
+            if pm_email.strip():
+                private_id = get_or_create_private_chat(
+                    st.session_state.user["email"], pm_email
+                )
+                st.success("Private chat ready!")
                 st.session_state["force_chat_id"] = private_id
                 st.rerun()
 
     # ================= RIGHT PANEL =================
     with col2:
         if "force_chat_id" in st.session_state:
-            selected_chat_id = st.session_state.pop("force_chat_id")
+            selected_chat_id = st.session_state["force_chat_id"]
+            st.session_state.pop("force_chat_id", None)
 
-        # Access control
-        if not user_can_access_chat(selected_chat_id, user_email):
+        st.markdown(f"### 💬 Chat: **{selected_chat_name}**")
+        if not user_can_access_chat(selected_chat_id, st.session_state.user["email"]):
             st.error("🚫 You are not authorized to view this chat.")
             st.stop()
 
-        st.markdown(f"### 💬 Chat: **{selected_chat_name}**")
         messages = get_chatroom_messages(selected_chat_id)
 
         chat_container = st.container()
@@ -658,15 +660,16 @@ def chat_page():
                 txt = msg["message"]
                 t = msg["time"]
 
-                if sender == user_email:
+                if sender == st.session_state.user["email"]:
                     st.chat_message("user").write(f"{txt}\n\n*{t}*")
                 else:
                     st.chat_message("assistant").write(f"**{sender}:** {txt}\n\n*{t}*")
 
         msg_input = st.chat_input("Type your message...")
         if msg_input:
-            send_message(selected_chat_id, user_email, msg_input)
+            send_message(selected_chat_id, st.session_state.user["email"], msg_input)
             st.rerun()
+
 
 def feed_page():
     back_button()
@@ -813,6 +816,7 @@ def main():
     elif nav == "Feed": feed_page()    
 if __name__ == "__main__":
     main()
+
 
 
 
