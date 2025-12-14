@@ -21,7 +21,7 @@ import pydeck as pdk
 from utils import (
     create_chatroom, send_message,
     get_chatroom_messages, search_messages,DB_PATH,
-    list_user_chats,get_or_create_private_chat
+    list_user_chats,get_or_create_private_chat, user_can_access_chat
     )
 # =======================================================
 # PAGE CONFIG + CSS
@@ -526,13 +526,21 @@ def repair_shops_page():
                 st.experimental_rerun()
             
             st.markdown("</div>", unsafe_allow_html=True)
-def chat_page():
-    import sqlite3
-    from datetime import datetime
+import streamlit as st
+from db import (
+    list_user_chats,
+    get_or_create_private_chat,
+    get_chatroom_messages,
+    send_message,
+    search_messages,
+    user_can_access_chat,
+    create_chatroom
+)
+from utils import back_button, DB_PATH
 
+def chat_page():
     back_button()
 
-    # ------------------ PAGE HEADER + FEATURES ------------------
     st.markdown("""
     <div style="
         padding:20px; 
@@ -564,18 +572,14 @@ def chat_page():
     </div>
     """, unsafe_allow_html=True)
 
-    # ------------------ LOAD CHATROOMS ------------------
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT id, name FROM chatrooms ORDER BY id DESC")
-    chatrooms = list_user_chats(st.session_state.user["email"])
-    conn.close()
+    user_email = st.session_state.user["email"]
 
-    # Create default chatroom if none
+    # ------------------ LOAD CHATROOMS FOR USER ONLY ------------------
+    chatrooms = list_user_chats(user_email)
+
     if not chatrooms:
-    default_id = create_chatroom("General Support")
-    chatrooms = [{"id": default_id, "name": "General Support"}]
-
+        default_id = create_chatroom("General Support")
+        chatrooms = [{"id": default_id, "name": "General Support"}]
 
     col1, col2 = st.columns([1, 2])
 
@@ -585,13 +589,9 @@ def chat_page():
         msg_query = st.text_input("", placeholder="Search by email, message, or chatroom...")
 
         if msg_query.strip():
-            results = search_messages(
-    msg_query,
-    st.session_state.user["email"]
-)
-
+            results = search_messages(msg_query, user_email)
             st.markdown("### 🔎 Results")
-            if len(results) == 0:
+            if not results:
                 st.info("No matching messages found.")
             for r in results:
                 st.markdown(f"""
@@ -611,14 +611,14 @@ def chat_page():
 
         st.markdown("### 💬 Chatrooms")
         selected_chat_name = st.radio(
-    "",
-    [room["name"] for room in chatrooms],
-    label_visibility="collapsed"
-)
+            "",
+            [room["name"] for room in chatrooms],
+            label_visibility="collapsed"
+        )
 
-selected_chat_id = next(
-    room["id"] for room in chatrooms if room["name"] == selected_chat_name
-)
+        selected_chat_id = next(
+            room["id"] for room in chatrooms if room["name"] == selected_chat_name
+        )
 
         # ---------------- Create Chatroom ----------------
         st.markdown("#### ➕ Create Chatroom")
@@ -633,44 +633,39 @@ selected_chat_id = next(
         st.markdown("#### 🔐 Private Message")
         pm_email = st.text_input("User Email", placeholder="Enter email to chat privately...")
         if st.button("Start Private Chat"):
-            if pm_email.strip():
-                private_id = get_or_create_private_chat(
-    st.session_state.user["email"], pm_email
-)
-
-                st.success("Private chat ready!")
+            if pm_email.strip() and pm_email != user_email:
+                private_id = get_or_create_private_chat(user_email, pm_email)
                 st.session_state["force_chat_id"] = private_id
                 st.rerun()
 
     # ================= RIGHT PANEL =================
     with col2:
         if "force_chat_id" in st.session_state:
-            selected_chat_id = st.session_state["force_chat_id"]
-            st.session_state.pop("force_chat_id", None)
+            selected_chat_id = st.session_state.pop("force_chat_id")
+
+        # Access control
+        if not user_can_access_chat(selected_chat_id, user_email):
+            st.error("🚫 You are not authorized to view this chat.")
+            st.stop()
 
         st.markdown(f"### 💬 Chat: **{selected_chat_name}**")
-        if not user_can_access_chat(selected_chat_id, st.session_state.user["email"]):
-    st.error("🚫 You are not authorized to view this chat.")
-    st.stop()
-
         messages = get_chatroom_messages(selected_chat_id)
 
         chat_container = st.container()
-
         with chat_container:
             for msg in messages:
                 sender = msg["sender"]
                 txt = msg["message"]
                 t = msg["time"]
 
-                if sender == st.session_state.user["email"]:
+                if sender == user_email:
                     st.chat_message("user").write(f"{txt}\n\n*{t}*")
                 else:
                     st.chat_message("assistant").write(f"**{sender}:** {txt}\n\n*{t}*")
 
         msg_input = st.chat_input("Type your message...")
         if msg_input:
-            send_message(selected_chat_id, st.session_state.user["email"], msg_input)
+            send_message(selected_chat_id, user_email, msg_input)
             st.rerun()
 
 def feed_page():
@@ -818,6 +813,7 @@ def main():
     elif nav == "Feed": feed_page()    
 if __name__ == "__main__":
     main()
+
 
 
 
