@@ -104,39 +104,7 @@ def load_user_listings(user_email):
     return [json.loads(row[0]) for row in rows]
 
 # ------------------- CHATROOMS & MESSAGES -------------------
-def create_private_chatroom_if_not_exists(user1, user2):
-    """
-    Creates a private chatroom between two users if it does not exist.
-    Returns chatroom_id.
-    """
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
 
-    # Ensure consistent ordering (important!)
-    users = sorted([user1, user2])
-    room_name = f"private:{users[0]}__{users[1]}"
-
-    # Check if chatroom already exists
-    c.execute(
-        "SELECT id FROM chatrooms WHERE name = ?",
-        (room_name,)
-    )
-    row = c.fetchone()
-
-    if row:
-        conn.close()
-        return row[0]
-
-    # Create new chatroom
-    c.execute(
-        "INSERT INTO chatrooms (name, created_at) VALUES (?, ?)",
-        (room_name, datetime.now().isoformat())
-    )
-    chatroom_id = c.lastrowid
-
-    conn.commit()
-    conn.close()
-    return chatroom_id
 def create_chatroom(name):
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
@@ -222,5 +190,6 @@ def list_user_chats(user_email):
     conn.close()
 
     return [{"id": r[0], "name": r[1]} for r in rows]
+
 
 
