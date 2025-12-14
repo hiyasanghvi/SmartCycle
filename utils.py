@@ -192,6 +192,23 @@ def get_or_create_private_chat(user1, user2):
     conn.close()
     return chatroom_id
 
+def user_can_access_chat(chatroom_id, user_email):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    c.execute("SELECT name FROM chatrooms WHERE id=?", (chatroom_id,))
+    row = c.fetchone()
+    conn.close()
+
+    if not row:
+        return False
+
+    name = row[0]
+
+    if name.startswith("private:"):
+        return user_email in name
+
+    return True
 
 def list_user_chats(user_email):
     """
@@ -228,6 +245,7 @@ def list_user_chats(user_email):
 
 
     
+
 
 
 
