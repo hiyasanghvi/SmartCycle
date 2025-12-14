@@ -127,23 +127,45 @@ def get_chatroom_messages(chatroom_id):
         rows = c.fetchall()
     return [{"sender": r[0], "message": r[1], "time": r[2]} for r in rows]
 
-def search_messages(query):
-    """Search messages by user email, sender name, or message content"""
+def search_messages(query, user_email):
+    """
+    Search messages only in chatrooms the user has access to
+    """
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
+
     query_param = f"%{query}%"
+    user_param = f"%{user_email}%"
+
     c.execute("""
         SELECT m.id, m.chatroom_id, m.sender_email, m.message, m.created_at, c.name
         FROM messages m
         JOIN chatrooms c ON m.chatroom_id = c.id
-        WHERE m.sender_email LIKE ?
-        OR m.message LIKE ?
-        OR c.name LIKE ?
+        WHERE
+            (
+                c.name NOT LIKE 'private:%'
+                OR c.name LIKE ?
+            )
+            AND (
+                m.sender_email LIKE ?
+                OR m.message LIKE ?
+                OR c.name LIKE ?
+            )
         ORDER BY m.created_at DESC
-    """, (query_param, query_param, query_param))
+    """, (user_param, query_param, query_param, query_param))
+
     rows = c.fetchall()
     conn.close()
-    return [{"message_id": r[0], "chatroom_id": r[1], "sender": r[2], "message": r[3], "time": r[4], "chatroom_name": r[5]} for r in rows]
+
+    return [{
+        "message_id": r[0],
+        "chatroom_id": r[1],
+        "sender": r[2],
+        "message": r[3],
+        "time": r[4],
+        "chatroom_name": r[5]
+    } for r in rows]
+
 def get_or_create_private_chat(user1, user2):
     """Returns chatroom_id for a private chat between two users.
        If not exists, automatically creates one."""
@@ -206,6 +228,7 @@ def list_user_chats(user_email):
 
 
     
+
 
 
 
