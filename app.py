@@ -528,7 +528,7 @@ def repair_shops_page():
             st.markdown("</div>", unsafe_allow_html=True)
 
 
-from utils import back_button, DB_PATH
+
 
 def chat_page():
     import sqlite3
@@ -816,6 +816,7 @@ def main():
     elif nav == "Feed": feed_page()    
 if __name__ == "__main__":
     main()
+
 
 
 
