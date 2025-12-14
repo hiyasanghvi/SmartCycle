@@ -21,9 +21,8 @@ import pydeck as pdk
 from utils import (
     create_chatroom, send_message,
     get_chatroom_messages, search_messages,DB_PATH,
-    list_user_chats
-     ,create_private_chatroom_if_not_exists 
-)
+    list_user_chats,get_or_create_private_chat
+    )
 # =======================================================
 # PAGE CONFIG + CSS
 # =======================================================
@@ -629,9 +628,10 @@ def chat_page():
         pm_email = st.text_input("User Email", placeholder="Enter email to chat privately...")
         if st.button("Start Private Chat"):
             if pm_email.strip():
-                private_id = create_private_chatroom_if_not_exists(
-                    st.session_state.user["email"], pm_email
-                )
+                private_id = get_or_create_private_chat(
+    st.session_state.user["email"], pm_email
+)
+
                 st.success("Private chat ready!")
                 st.session_state["force_chat_id"] = private_id
                 st.rerun()
@@ -809,5 +809,6 @@ def main():
     elif nav == "Feed": feed_page()    
 if __name__ == "__main__":
     main()
+
 
 
