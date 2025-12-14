@@ -171,9 +171,7 @@ def get_or_create_private_chat(user1, user2):
     return chatroom_id
 
 
-    
 def list_user_chats(user_email):
-    def list_user_chats(user_email):
     """
     Returns chatrooms visible to a user.
     - Public chatrooms: visible to all
@@ -205,6 +203,7 @@ def list_user_chats(user_email):
     rooms = public_rooms + private_rooms
 
     return [{"id": r[0], "name": r[1]} for r in rooms]
+
 
     
 
