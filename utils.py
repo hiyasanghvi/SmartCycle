@@ -173,23 +173,41 @@ def get_or_create_private_chat(user1, user2):
 
     
 def list_user_chats(user_email):
-    """Returns all chatrooms where the user has sent or received messages."""
+    def list_user_chats(user_email):
+    """
+    Returns chatrooms visible to a user.
+    - Public chatrooms: visible to all
+    - Private chatrooms: visible ONLY if user is a participant
+    """
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
+    # Public chatrooms
     c.execute("""
-        SELECT DISTINCT c.id, c.name, MAX(m.created_at)
-        FROM messages m
-        JOIN chatrooms c ON m.chatroom_id = c.id
-        WHERE m.sender_email = ?
-        GROUP BY c.id, c.name
-        ORDER BY MAX(m.created_at) DESC
-    """, (user_email,))
+        SELECT id, name
+        FROM chatrooms
+        WHERE name NOT LIKE 'private:%'
+    """)
+    public_rooms = c.fetchall()
 
-    rows = c.fetchall()
+    # Private chatrooms where user is a participant
+    c.execute("""
+        SELECT id, name
+        FROM chatrooms
+        WHERE name LIKE 'private:%'
+        AND name LIKE ?
+    """, (f"%{user_email}%",))
+
+    private_rooms = c.fetchall()
+
     conn.close()
 
-    return [{"id": r[0], "name": r[1]} for r in rows]
+    rooms = public_rooms + private_rooms
+
+    return [{"id": r[0], "name": r[1]} for r in rooms]
+
+    
+
 
 
 
