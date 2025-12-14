@@ -12,7 +12,6 @@ def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         c = conn.cursor()
 
-        # Users table
         c.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,7 +24,6 @@ def init_db():
         )
         """)
 
-        # Items table
         c.execute("""
         CREATE TABLE IF NOT EXISTS items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,7 +33,6 @@ def init_db():
         )
         """)
 
-        # Chatrooms table
         c.execute("""
         CREATE TABLE IF NOT EXISTS chatrooms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,7 +41,15 @@ def init_db():
         )
         """)
 
-        # Messages table
+        c.execute("""
+        CREATE TABLE IF NOT EXISTS chat_participants (
+            chatroom_id INTEGER,
+            user_email TEXT,
+            PRIMARY KEY (chatroom_id, user_email),
+            FOREIGN KEY (chatroom_id) REFERENCES chatrooms(id)
+        )
+        """)
+
         c.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,6 +60,7 @@ def init_db():
             FOREIGN KEY (chatroom_id) REFERENCES chatrooms(id)
         )
         """)
+
         conn.commit()
 
 # ------------------- USER MANAGEMENT -------------------
@@ -128,14 +134,10 @@ def get_chatroom_messages(chatroom_id):
     return [{"sender": r[0], "message": r[1], "time": r[2]} for r in rows]
 
 def search_messages(query, user_email):
-    """
-    Search messages only in chatrooms the user has access to
-    """
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
-    query_param = f"%{query}%"
-    user_param = f"%{user_email}%"
+    q = f"%{query}%"
 
     c.execute("""
         SELECT m.id, m.chatroom_id, m.sender_email, m.message, m.created_at, c.name
@@ -143,16 +145,24 @@ def search_messages(query, user_email):
         JOIN chatrooms c ON m.chatroom_id = c.id
         WHERE
             (
-                c.name NOT LIKE 'private:%'
-                OR c.name LIKE ?
+                -- public chats
+                m.chatroom_id NOT IN (
+                    SELECT chatroom_id FROM chat_participants
+                )
+                OR
+                -- private chats user participates in
+                m.chatroom_id IN (
+                    SELECT chatroom_id FROM chat_participants
+                    WHERE user_email = ?
+                )
             )
-            AND (
-                m.sender_email LIKE ?
-                OR m.message LIKE ?
-                OR c.name LIKE ?
-            )
+        AND (
+            m.sender_email LIKE ?
+            OR m.message LIKE ?
+            OR c.name LIKE ?
+        )
         ORDER BY m.created_at DESC
-    """, (user_param, query_param, query_param, query_param))
+    """, (user_email, q, q, q))
 
     rows = c.fetchall()
     conn.close()
@@ -166,85 +176,107 @@ def search_messages(query, user_email):
         "chatroom_name": r[5]
     } for r in rows]
 
+
 def get_or_create_private_chat(user1, user2):
-    """Returns chatroom_id for a private chat between two users.
-       If not exists, automatically creates one."""
-    
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
-    chat_name = f"private:{min(user1, user2)}:{max(user1, user2)}"
+    # existing private chat?
+    c.execute("""
+        SELECT chatroom_id
+        FROM chat_participants
+        GROUP BY chatroom_id
+        HAVING COUNT(*) = 2
+        AND SUM(user_email = ?) = 1
+        AND SUM(user_email = ?) = 1
+    """, (user1, user2))
 
-    # Check if chatroom exists
-    c.execute("SELECT id FROM chatrooms WHERE name=?", (chat_name,))
     row = c.fetchone()
-
     if row:
-        chatroom_id = row[0]
-    else:
-        # Create if not exists
-        created_at = datetime.now().isoformat()
-        c.execute("INSERT INTO chatrooms (name, created_at) VALUES (?, ?)", 
-                  (chat_name, created_at))
-        chatroom_id = c.lastrowid
+        conn.close()
+        return row[0]
+
+    chat_name = f"Private: {user1} ↔ {user2}"
+
+    c.execute(
+        "INSERT INTO chatrooms (name, created_at) VALUES (?, ?)",
+        (chat_name, datetime.now().isoformat())
+    )
+    chatroom_id = c.lastrowid
+
+    c.executemany("""
+        INSERT INTO chat_participants (chatroom_id, user_email)
+        VALUES (?, ?)
+    """, [
+        (chatroom_id, user1),
+        (chatroom_id, user2)
+    ])
 
     conn.commit()
     conn.close()
     return chatroom_id
 
+
+
 def user_can_access_chat(chatroom_id, user_email):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
-    c.execute("SELECT name FROM chatrooms WHERE id=?", (chatroom_id,))
-    row = c.fetchone()
+    # Public chat
+    c.execute("""
+        SELECT 1 FROM chatrooms
+        WHERE id = ?
+        AND id NOT IN (SELECT chatroom_id FROM chat_participants)
+    """, (chatroom_id,))
+    if c.fetchone():
+        conn.close()
+        return True
+
+    # Private chat
+    c.execute("""
+        SELECT 1 FROM chat_participants
+        WHERE chatroom_id = ? AND user_email = ?
+    """, (chatroom_id, user_email))
+
+    allowed = c.fetchone() is not None
     conn.close()
+    return allowed
 
-    if not row:
-        return False
 
-    name = row[0]
-
-    if name.startswith("private:"):
-        return user_email in name
-
-    return True
 
 def list_user_chats(user_email):
-    """
-    Returns chatrooms visible to a user.
-    - Public chatrooms: visible to all
-    - Private chatrooms: visible ONLY if user is a participant
-    """
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
 
-    # Public chatrooms
+    # Public chats
     c.execute("""
         SELECT id, name
         FROM chatrooms
-        WHERE name NOT LIKE 'private:%'
+        WHERE id NOT IN (
+            SELECT chatroom_id FROM chat_participants
+        )
     """)
     public_rooms = c.fetchall()
 
-    # Private chatrooms where user is a participant
+    # Private chats user participates in
     c.execute("""
-        SELECT id, name
-        FROM chatrooms
-        WHERE name LIKE 'private:%'
-        AND name LIKE ?
-    """, (f"%{user_email}%",))
-
+        SELECT c.id, c.name
+        FROM chatrooms c
+        JOIN chat_participants cp ON c.id = cp.chatroom_id
+        WHERE cp.user_email = ?
+    """, (user_email,))
     private_rooms = c.fetchall()
 
     conn.close()
 
     rooms = public_rooms + private_rooms
-
     return [{"id": r[0], "name": r[1]} for r in rooms]
 
 
+
+
     
+
 
 
 
